@@ -28,6 +28,28 @@ header h1 {
   margin-bottom: 10px;
 }
 
+#auth-container {
+  margin-bottom: 24px;
+}
+
+#auth-container h4 {
+  margin: 16px 0 8px;
+  color: #1a237e;
+}
+
+#auth-status {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+#logout-button {
+  margin-top: 10px;
+}
+
+#auth-message {
+  margin-top: 12px;
+}
+
 main {
   display: flex;
   flex-wrap: wrap;
@@ -190,6 +212,11 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+.signup-note {
+  margin-top: 10px;
+  color: #666;
 }
 
 footer {

@@ -12,6 +12,44 @@
       <h2>Extracurricular Activities</h2>
     </header>
 
+    <section id="auth-container">
+      <h3>Student Account</h3>
+      <p id="auth-status">Not signed in.</p>
+
+      <form id="signup-account-form">
+        <h4>Create Account</h4>
+        <div class="form-group">
+          <label for="signup-name">Full Name:</label>
+          <input type="text" id="signup-name" required placeholder="Your name" />
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Email:</label>
+          <input type="email" id="signup-email" required placeholder="your-email@mergington.edu" />
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password:</label>
+          <input type="password" id="signup-password" required minlength="8" placeholder="At least 8 characters" />
+        </div>
+        <button type="submit">Create Account</button>
+      </form>
+
+      <form id="login-form">
+        <h4>Sign In</h4>
+        <div class="form-group">
+          <label for="login-email">Email:</label>
+          <input type="email" id="login-email" required placeholder="your-email@mergington.edu" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password:</label>
+          <input type="password" id="login-password" required placeholder="Your password" />
+        </div>
+        <button type="submit">Sign In</button>
+      </form>
+
+      <button id="logout-button" type="button" class="hidden">Sign Out</button>
+      <div id="auth-message" class="hidden"></div>
+    </section>
+
     <main>
       <section id="activities-container">
         <h3>Available Activities</h3>
@@ -25,10 +63,6 @@
         <h3>Sign Up for an Activity</h3>
         <form id="signup-form">
           <div class="form-group">
-            <label for="email">Student Email:</label>
-            <input type="email" id="email" required placeholder="your-email@mergington.edu" />
-          </div>
-          <div class="form-group">
             <label for="activity">Select Activity:</label>
             <select id="activity" required>
               <option value="">-- Select an activity --</option>
@@ -37,6 +71,7 @@
           </div>
           <button type="submit">Sign Up</button>
         </form>
+        <p class="signup-note">Sign in first to register or unregister.</p>
         <div id="message" class="hidden"></div>
       </section>
     </main>
