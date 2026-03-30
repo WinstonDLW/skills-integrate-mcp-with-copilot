@@ -5,11 +5,16 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+import hashlib
+import hmac
 import os
+import secrets
 from pathlib import Path
+
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -77,6 +82,68 @@ activities = {
     }
 }
 
+# In-memory student account store and auth sessions.
+# Keys are lowercased emails for consistent identity matching.
+students = {}
+auth_tokens = {}
+
+
+class StudentSignupRequest(BaseModel):
+    email: str
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class StudentLoginRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=1, max_length=128)
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _validate_email(email: str) -> None:
+    # Keep validation lightweight and dependency-free for this in-memory demo app.
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
+
+def _hash_password(password: str, salt: str | None = None) -> str:
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+    ).hex()
+    return f"{salt}${digest}"
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        salt, known_digest = stored_hash.split("$", 1)
+    except ValueError:
+        return False
+    computed_hash = _hash_password(password, salt)
+    return hmac.compare_digest(computed_hash, f"{salt}${known_digest}")
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+
+    return token
+
+
+def get_authenticated_student(authorization: str | None = Header(default=None)) -> dict:
+    token = _extract_bearer_token(authorization)
+    email = auth_tokens.get(token)
+    if not email or email not in students:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return students[email]
+
 
 @app.get("/")
 def root():
@@ -88,9 +155,64 @@ def get_activities():
     return activities
 
 
+@app.post("/auth/signup")
+def signup_student(payload: StudentSignupRequest):
+    normalized_email = _normalize_email(payload.email)
+    _validate_email(normalized_email)
+    if normalized_email in students:
+        raise HTTPException(status_code=400, detail="Account already exists")
+
+    students[normalized_email] = {
+        "email": normalized_email,
+        "name": payload.name.strip(),
+        "password_hash": _hash_password(payload.password),
+    }
+    return {"message": "Account created successfully"}
+
+
+@app.post("/auth/login")
+def login_student(payload: StudentLoginRequest):
+    normalized_email = _normalize_email(payload.email)
+    _validate_email(normalized_email)
+    student = students.get(normalized_email)
+    if not student or not _verify_password(payload.password, student["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = secrets.token_urlsafe(32)
+    auth_tokens[token] = normalized_email
+    return {
+        "message": "Login successful",
+        "token": token,
+        "student": {
+            "email": student["email"],
+            "name": student["name"],
+        },
+    }
+
+
+@app.get("/auth/me")
+def get_current_student(current_student: dict = Depends(get_authenticated_student)):
+    return {
+        "email": current_student["email"],
+        "name": current_student["name"],
+    }
+
+
+@app.post("/auth/logout")
+def logout_student(authorization: str | None = Header(default=None)):
+    token = _extract_bearer_token(authorization)
+    auth_tokens.pop(token, None)
+    return {"message": "Logged out successfully"}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(
+    activity_name: str,
+    current_student: dict = Depends(get_authenticated_student),
+):
     """Sign up a student for an activity"""
+    email = current_student["email"]
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -111,8 +233,13 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(
+    activity_name: str,
+    current_student: dict = Depends(get_authenticated_student),
+):
     """Unregister a student from an activity"""
+    email = current_student["email"]
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
